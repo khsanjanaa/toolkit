@@ -7,7 +7,7 @@ import NotFound from './components/NotFound';
 import OnboardingTimeline from './components/Onboard';
 import AdvancedSearch from './components/SearchFilter';
 import KnowledgePlatformUpload from './components/UploadArticrafts';
-
+import Settings from './components/Settings';
 function App() {
   return (
     <BrowserRouter>
@@ -19,6 +19,7 @@ function App() {
           <Route path="/search" element={<AdvancedSearch />} />
           <Route path="/onboarding" element={<OnboardingTimeline />} />
           <Route path="/ai" element={<AIKnowledgeAssistant />} />
+          <Route path='/settings' element={<Settings/>}/>
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
