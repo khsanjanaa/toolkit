@@ -1,5 +1,5 @@
 import { Calendar, CheckCircle, Code, Database, File, FileText, Github, Image, MessageSquare, Tag, Upload, X } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 
 const KnowledgePlatformUpload = () => {
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -10,6 +10,8 @@ const KnowledgePlatformUpload = () => {
   const [description, setDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
   const fileInputRef = useRef(null);
 
   const categories = [
@@ -26,12 +28,67 @@ const KnowledgePlatformUpload = () => {
     'Migration', 'Bug Fix', 'Feature', 'Refactor', 'Testing', 'DevOps'
   ];
 
+  // Fetch recent uploads from backend
+  const fetchRecentUploads = async () => {
+    try {
+      setLoadingActivity(true);
+      const response = await fetch('http://localhost:5000/api/recent-uploads?limit=5');
+      if (response.ok) {
+        const data = await response.json();
+        setRecentActivity(data);
+      } else {
+        console.error('Failed to fetch recent uploads');
+        // Fallback to empty array if API fails
+        setRecentActivity([]);
+      }
+    } catch (error) {
+      console.error('Error fetching recent uploads:', error);
+      setRecentActivity([]);
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
+
+  // Load recent uploads on component mount
+  useEffect(() => {
+    fetchRecentUploads();
+  }, []);
+
   const getFileIcon = (fileName) => {
     const extension = fileName.split('.').pop().toLowerCase();
     if (['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(extension)) return Image;
     if (['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'cpp'].includes(extension)) return Code;
     if (['md', 'txt', 'doc', 'docx'].includes(extension)) return FileText;
     return File;
+  };
+
+  const formatTimeAgo = (timestamp) => {
+    const now = new Date();
+    const uploadDate = new Date(timestamp * 1000); // Convert timestamp to Date
+    const diffInMinutes = Math.floor((now - uploadDate) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    return `${diffInWeeks} weeks ago`;
+  };
+
+  const addToRecentActivity = (title, category) => {
+    const newActivity = {
+      title,
+      type: category,
+      timestamp: Date.now() / 1000, // Convert to seconds for consistency
+      date: new Date().toISOString().split('T')[0]
+    };
+    
+    setRecentActivity(prev => [newActivity, ...prev.slice(0, 4)]); // Keep only 5 most recent
   };
 
   const handleDrag = useCallback((e) => {
@@ -83,15 +140,28 @@ const KnowledgePlatformUpload = () => {
     
     setIsUploading(true);
     
-    // Simulate upload progress
-    for (let file of uploadedFiles) {
-      for (let progress = 0; progress <= 100; progress += 20) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        setUploadedFiles(prev => 
-          prev.map(f => f.id === file.id ? { ...f, uploadProgress: progress } : f)
-        );
+    // Upload each file with metadata
+    for (let fileObj of uploadedFiles) {
+      const formData = new FormData();
+      formData.append('file', fileObj.file);
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('category', selectedCategory);
+      formData.append('tags', selectedTags.join(','));
+
+      try {
+        await fetch('http://localhost:5000/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (err) {
+        console.error('Upload error:', err);
       }
     }
+    
+    // Add to recent activity and refresh from backend
+    addToRecentActivity(title, selectedCategory);
+    await fetchRecentUploads(); // Refresh from backend to get accurate data
     
     setIsUploading(false);
     setShowSuccess(true);
@@ -113,6 +183,14 @@ const KnowledgePlatformUpload = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Update time display for recent activity
+  const getActivityTime = (activity) => {
+    if (activity.timestamp) {
+      return formatTimeAgo(activity.timestamp);
+    }
+    return activity.time || 'Unknown';
   };
 
   return (
@@ -326,21 +404,28 @@ const KnowledgePlatformUpload = () => {
             <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 border border-gray-200 shadow-2xl">
               <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Activity</h3>
               <div className="space-y-3">
-                {[
-                  { title: 'API Documentation Updated', time: '2 hours ago', type: 'documentation' },
-                  { title: 'Meeting Notes: Sprint Planning', time: '1 day ago', type: 'meetings' },
-                  { title: 'Database Migration Guide', time: '3 days ago', type: 'architecture' }
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="w-8 h-8 bg-gradient-to-r from-slate-800 to-purple-800 rounded-lg flex items-center justify-center">
-                      <FileText className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-800 text-sm font-medium truncate">{item.title}</p>
-                      <p className="text-gray-500 text-xs">{item.time}</p>
-                    </div>
+                {loadingActivity ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                    <p className="text-gray-500 text-sm mt-2">Loading recent activity...</p>
                   </div>
-                ))}
+                ) : recentActivity.length > 0 ? (
+                  recentActivity.map((item, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="w-8 h-8 bg-gradient-to-r from-slate-800 to-purple-800 rounded-lg flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800 text-sm font-medium truncate">{item.title}</p>
+                        <p className="text-gray-500 text-xs">{getActivityTime(item)}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm">No recent uploads</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

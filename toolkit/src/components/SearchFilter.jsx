@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Calendar, User, Tag, FileText, GitPullRequest, MessageSquare, Activity, Clock, Star, Eye, Download, ExternalLink, ChevronDown, X, SlidersHorizontal, ArrowUpDown, Grid, List, Zap } from 'lucide-react';
+import { Search, Filter, Calendar, User, Tag, FileText, GitPullRequest, MessageSquare, Activity, Clock, Eye, Download, ExternalLink, ChevronDown, X, SlidersHorizontal, ArrowUpDown, Grid, List, Zap } from 'lucide-react';
 
 const AdvancedSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,102 +10,12 @@ const AdvancedSearch = () => {
     contentType: [],
     dateRange: '',
     author: [],
-    tags: [],
-    priority: ''
+    tags: []
   });
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-
-  // Mock data for search results
-  const mockResults = [
-    {
-      id: 1,
-      title: "API Authentication & Security Guidelines",
-      type: "documentation",
-      author: "Sarah Chen",
-      date: "2024-07-28",
-      tags: ["security", "api", "authentication"],
-      priority: "high",
-      views: 145,
-      description: "Comprehensive guide for implementing secure authentication in our microservices architecture...",
-      lastModified: "3 days ago",
-      size: "2.3 MB",
-      status: "updated"
-    },
-    {
-      id: 2,
-      title: "Fix: Memory leak in user session management",
-      type: "pull-request",
-      author: "Mike Johnson",
-      date: "2024-07-25",
-      tags: ["bug-fix", "performance", "session"],
-      priority: "high",
-      views: 89,
-      description: "Resolved critical memory leak affecting user sessions during peak traffic periods...",
-      lastModified: "1 week ago",
-      size: "1.2 MB",
-      status: "merged"
-    },
-    {
-      id: 3,
-      title: "Q2 Architecture Review Meeting",
-      type: "meeting-notes",
-      author: "Engineering Team",
-      date: "2024-07-20",
-      tags: ["architecture", "review", "planning"],
-      priority: "medium",
-      views: 67,
-      description: "Discussion on microservices migration strategy and infrastructure scaling plans...",
-      lastModified: "2 weeks ago",
-      size: "856 KB",
-      status: "final"
-    },
-    {
-      id: 4,
-      title: "Database Migration Rollback Procedures",
-      type: "documentation",
-      author: "Alex Kumar",
-      date: "2024-07-15",
-      tags: ["database", "migration", "procedures"],
-      priority: "high",
-      views: 234,
-      description: "Step-by-step procedures for safely rolling back database migrations in production...",
-      lastModified: "3 weeks ago",
-      size: "1.8 MB",
-      status: "approved"
-    },
-    {
-      id: 5,
-      title: "Implement Redis caching layer",
-      type: "pull-request",
-      author: "Emma Wilson",
-      date: "2024-07-10",
-      tags: ["caching", "performance", "redis"],
-      priority: "medium",
-      views: 92,
-      description: "Added Redis caching to improve API response times and reduce database load...",
-      lastModified: "1 month ago",
-      size: "3.1 MB",
-      status: "review"
-    },
-    {
-      id: 6,
-      title: "Frontend Component Library v3.0",
-      type: "changelog",
-      author: "Design System Team",
-      date: "2024-07-05",
-      tags: ["frontend", "components", "design-system"],
-      priority: "medium",
-      views: 156,
-      description: "Major update to component library with new design tokens and accessibility improvements...",
-      lastModified: "1 month ago",
-      size: "2.7 MB",
-      status: "released"
-    }
-  ];
-
-  const filterOptions = {
+  const [filterOptions, setFilterOptions] = useState({
     contentType: [
       { value: 'documentation', label: 'Documentation', icon: FileText, color: 'blue' },
       { value: 'pull-request', label: 'Pull Requests', icon: GitPullRequest, color: 'green' },
@@ -114,91 +24,103 @@ const AdvancedSearch = () => {
     ],
     dateRange: [
       { value: 'today', label: 'Today' },
-      { value: 'week', label: 'This Week' },
-      { value: 'month', label: 'This Month' },
-      { value: 'quarter', label: 'This Quarter' },
-      { value: 'year', label: 'This Year' }
+      { value: 'this_week', label: 'This Week' },
+      { value: 'this_month', label: 'This Month' },
+      { value: 'this_quarter', label: 'This Quarter' },
+      { value: 'this_year', label: 'This Year' }
     ],
-    authors: ['Sarah Chen', 'Mike Johnson', 'Alex Kumar', 'Emma Wilson', 'Design System Team'],
-    tags: ['security', 'api', 'authentication', 'bug-fix', 'performance', 'architecture', 'database', 'caching', 'frontend', 'design-system'],
-    priority: [
-      { value: 'high', label: 'High Priority', color: 'red' },
-      { value: 'medium', label: 'Medium Priority', color: 'yellow' },
-      { value: 'low', label: 'Low Priority', color: 'green' }
-    ],
+    authors: [],
+    tags: [],
     sortOptions: [
       { value: 'relevance', label: 'Relevance' },
       { value: 'date', label: 'Date Modified' },
       { value: 'views', label: 'Most Viewed' },
       { value: 'title', label: 'Title A-Z' }
     ]
+  });
+
+  // Load filter options from backend
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/search/filters');
+        if (response.ok) {
+          const data = await response.json();
+          setFilterOptions(prev => ({
+            ...prev,
+            authors: data.authors || [],
+            tags: data.tags || []
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading filter options:', error);
+      }
+    };
+    loadFilterOptions();
+  }, []);
+
+  // Search function
+  const performSearch = async () => {
+    setIsSearching(true);
+    try {
+      const params = new URLSearchParams();
+      
+      if (searchQuery) params.append('q', searchQuery);
+      selectedFilters.contentType.forEach(type => params.append('type', type));
+      selectedFilters.author.forEach(author => params.append('author', author));
+      selectedFilters.tags.forEach(tag => params.append('tags', tag));
+      if (selectedFilters.dateRange) params.append('dateRange', selectedFilters.dateRange);
+      if (sortBy !== 'relevance') params.append('sortBy', sortBy);
+
+      const response = await fetch(`http://localhost:5000/api/search?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data);
+      } else {
+        console.error('Search failed:', response.statusText);
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error performing search:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
-  // Filter and search logic
-  const filteredResults = useMemo(() => {
-    let results = [...mockResults];
+  // Perform search when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      performSearch();
+    }, 500); // Debounce search
 
-    // Text search
-    if (searchQuery) {
-      results = results.filter(item =>
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    // Content type filter
-    if (selectedFilters.contentType.length > 0) {
-      results = results.filter(item => selectedFilters.contentType.includes(item.type));
-    }
-
-    // Author filter
-    if (selectedFilters.author.length > 0) {
-      results = results.filter(item => selectedFilters.author.includes(item.author));
-    }
-
-    // Tags filter
-    if (selectedFilters.tags.length > 0) {
-      results = results.filter(item =>
-        selectedFilters.tags.some(tag => item.tags.includes(tag))
-      );
-    }
-
-    // Priority filter
-    if (selectedFilters.priority) {
-      results = results.filter(item => item.priority === selectedFilters.priority);
-    }
-
-    // Sort results
-    results.sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          return new Date(b.date) - new Date(a.date);
-        case 'views':
-          return b.views - a.views;
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
-
-    return results;
+    return () => clearTimeout(timeoutId);
   }, [searchQuery, selectedFilters, sortBy]);
 
-  // Simulate search loading
-  useEffect(() => {
-    if (searchQuery || Object.values(selectedFilters).some(f => Array.isArray(f) ? f.length > 0 : f)) {
-      setIsSearching(true);
-      const timer = setTimeout(() => {
-        setSearchResults(filteredResults);
-        setIsSearching(false);
-      }, 800);
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults(mockResults);
+  // Download file function
+  const handleDownload = async (downloadUrl) => {
+    try {
+      const response = await fetch(`http://localhost:5000${downloadUrl}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = downloadUrl.split('/').pop();
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
     }
-  }, [searchQuery, selectedFilters, filteredResults]);
+  };
+
+  // View file function (opens in new tab)
+  const handleView = (viewUrl) => {
+    window.open(`http://localhost:5000${viewUrl}`, '_blank');
+  };
 
   const handleFilterChange = (filterType, value) => {
     setSelectedFilters(prev => {
@@ -218,8 +140,7 @@ const AdvancedSearch = () => {
       contentType: [],
       dateRange: '',
       author: [],
-      tags: [],
-      priority: ''
+      tags: []
     });
     setSearchQuery('');
   };
@@ -239,6 +160,7 @@ const AdvancedSearch = () => {
       case 'approved': return 'bg-emerald-100 text-emerald-800';
       case 'review': return 'bg-yellow-100 text-yellow-800';
       case 'released': return 'bg-indigo-100 text-indigo-800';
+      case 'uploaded': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -357,7 +279,7 @@ const AdvancedSearch = () => {
           {/* Filter Panel */}
           {isFilterOpen && (
             <div className="mt-6 bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 p-6 shadow-xl animate-in slide-in-from-top-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Content Type Filter */}
                 <div>
                   <h4 className="font-semibold mb-3 text-gray-900">Content Type</h4>
@@ -412,26 +334,6 @@ const AdvancedSearch = () => {
                           className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />
                         <span className="text-sm group-hover:text-blue-600 transition-colors">{author}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Priority Filter */}
-                <div>
-                  <h4 className="font-semibold mb-3 text-gray-900">Priority</h4>
-                  <div className="space-y-2">
-                    {filterOptions.priority.map((priority) => (
-                      <label key={priority.value} className="flex items-center space-x-2 cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="priority"
-                          checked={selectedFilters.priority === priority.value}
-                          onChange={(e) => handleFilterChange('priority', priority.value)}
-                          className={`w-4 h-4 text-${priority.color}-600 focus:ring-${priority.color}-500`}
-                        />
-                        <div className={`w-3 h-3 bg-${priority.color}-500 rounded-full`}></div>
-                        <span className="text-sm group-hover:text-blue-600 transition-colors">{priority.label}</span>
                       </label>
                     ))}
                   </div>
@@ -509,17 +411,6 @@ const AdvancedSearch = () => {
                   </button>
                 </span>
               ))}
-              {selectedFilters.priority && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
-                  {filterOptions.priority.find(p => p.value === selectedFilters.priority)?.label}
-                  <button
-                    onClick={() => handleFilterChange('priority', '')}
-                    className="ml-2 hover:text-red-600"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              )}
             </div>
           )}
         </div>
@@ -593,23 +484,32 @@ const AdvancedSearch = () => {
                             </div>
                             <div className="flex items-center">
                               <Eye className="w-4 h-4 mr-1" />
-                              {result.views} views
+                              {result.views || 0} views
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                              <Star className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors">
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
+                            {result.download_url && (
+                              <button 
+                                onClick={() => handleDownload(result.download_url)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Download"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            )}
+                            {result.view_url && (
+                              <button 
+                                onClick={() => handleView(result.view_url)}
+                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mt-3">
-                          {result.tags.map(tag => (
+                          {result.tags && result.tags.map(tag => (
                             <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">
                               #{tag}
                             </span>
@@ -645,12 +545,12 @@ const AdvancedSearch = () => {
                   </p>
                   
                   <div className="flex flex-wrap gap-1 mb-4">
-                    {result.tags.slice(0, 3).map(tag => (
+                    {result.tags && result.tags.slice(0, 3).map(tag => (
                       <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">
                         #{tag}
                       </span>
                     ))}
-                    {result.tags.length > 3 && (
+                    {result.tags && result.tags.length > 3 && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">
                         +{result.tags.length - 3} more
                       </span>
@@ -665,19 +565,28 @@ const AdvancedSearch = () => {
                       </div>
                       <div className="flex items-center">
                         <Eye className="w-4 h-4 mr-1" />
-                        {result.views}
+                        {result.views || 0}
                       </div>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <button className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
-                        <Star className="w-4 h-4" />
-                      </button>
-                      <button className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors">
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors">
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
+                      {result.download_url && (
+                        <button 
+                          onClick={() => handleDownload(result.download_url)}
+                          className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
+                      {result.view_url && (
+                        <button 
+                          onClick={() => handleView(result.view_url)}
+                          className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="View"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -713,8 +622,7 @@ const AdvancedSearch = () => {
               Quick Search Suggestions
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {['API Security', 'Database Migration', 'Performance Issues', 'Frontend Components', 
-                'Architecture Decisions', 'Bug Fixes', 'Meeting Notes', 'Code Reviews'].map((suggestion) => (
+              {['syllabus', 'resume', 'hackathon', 'projects', 'meetings', 'documentation'].map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => setSearchQuery(suggestion)}

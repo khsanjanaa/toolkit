@@ -1,6 +1,6 @@
 import os
 import google.generativeai as genai
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime
@@ -48,7 +48,9 @@ mock_sources = [
     }
 ]
 
-@app.route('/ask-ai', methods=['POST'])
+ai_bp = Blueprint('ai', __name__)
+
+@ai_bp.route('/ai/ask', methods=['POST'])
 def ask_ai():
     """Enhanced AI question handling with context"""
     try:
@@ -137,6 +139,8 @@ def clear_history():
     global chat_history
     chat_history = [chat_history[0]]  # Keep only the initial welcome message
     return jsonify({"message": "Chat history cleared"})
+
+artifacts_bp = Blueprint('artifacts', __name__)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

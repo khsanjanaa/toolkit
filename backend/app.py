@@ -4,20 +4,33 @@ from werkzeug.utils import secure_filename
 import os
 import json
 import uuid
-from datetime import datetime, timedelta
-import random
+from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import blueprints
 from artifacts import artifacts_bp
 from onboarding import onboarding_bp
-from ai_assistant import app as ai_app
+from ai_assistant import app as ai_app  # If ai_app is a Flask app, skip; if it's a blueprint, import as blueprint
+from search_filter import search_filter_bp
+from github_routes import github_bp
+from knowledge_paths import knowledge_paths_bp
+from data_persistence import weekly_persistence
+from routes.ai_assisstant import ai_bp
+from routes.uploads import upload_bp
+from routes.rag_chat import rag_bp
+
+# Import agent function
+from agents.ai_agent import answer_query
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"], "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
 
 # Configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -25,8 +38,14 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Register blueprints
 app.register_blueprint(artifacts_bp, url_prefix='/api')
 app.register_blueprint(onboarding_bp, url_prefix='/api')
+app.register_blueprint(search_filter_bp)
+app.register_blueprint(github_bp)
+app.register_blueprint(knowledge_paths_bp, url_prefix='/api')
+app.register_blueprint(ai_bp)
+app.register_blueprint(upload_bp)
+app.register_blueprint(rag_bp)
 
-# Global data storage (In production, use a proper database)
+# Global dashboard mock data
 dashboard_data = {
     'stats': {
         'total_documents': 1247,
@@ -38,10 +57,9 @@ dashboard_data = {
     'notifications': []
 }
 
-# Dashboard endpoints
+# API Routes
 @app.route('/api/dashboard/stats', methods=['GET'])
 def get_dashboard_stats():
-    """Get dashboard statistics"""
     return jsonify({
         'total_documents': dashboard_data['stats']['total_documents'],
         'active_prs': dashboard_data['stats']['active_prs'],
@@ -57,7 +75,6 @@ def get_dashboard_stats():
 
 @app.route('/api/dashboard/activity', methods=['GET'])
 def get_recent_activity():
-    """Get recent activity feed"""
     mock_activity = [
         {
             'id': 1,
@@ -96,172 +113,125 @@ def get_recent_activity():
 
 @app.route('/api/dashboard/categories', methods=['GET'])
 def get_categories():
-    """Get knowledge base categories"""
     categories = [
-        {'name': 'Documentation', 'count': 456, 'color': 'bg-blue-500'},
-        {'name': 'Pull Requests', 'count': 234, 'color': 'bg-green-500'},
-        {'name': 'Meeting Notes', 'count': 123, 'color': 'bg-purple-500'},
-        {'name': 'Changelogs', 'count': 89, 'color': 'bg-orange-500'}
+        {
+            'name': 'Documentation',
+            'count': 456,
+            'color': 'bg-blue-500',
+            'icon': 'FileText',
+            'type': 'documentation'
+        },
+        {
+            'name': 'Pull Requests',
+            'count': 234,
+            'color': 'bg-green-500',
+            'icon': 'GitPullRequest',
+            'type': 'github'
+        },
+        {
+            'name': 'Meeting Notes',
+            'count': 123,
+            'color': 'bg-purple-500',
+            'icon': 'MessageSquare',
+            'type': 'meetings'
+        },
+        {
+            'name': 'Changelogs',
+            'count': 89,
+            'color': 'bg-orange-500',
+            'icon': 'Activity',
+            'type': 'changelogs'
+        }
     ]
     return jsonify(categories)
 
-# AI Assistant endpoints (integrating with existing ai_assistant.py)
-@app.route('/api/ai/ask', methods=['POST'])
-def ask_ai():
-    """Proxy to AI assistant"""
-    try:
-        from ai_assistant import ask_ai as ai_ask
-        return ai_ask()
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/ai/history', methods=['GET'])
-def get_ai_history():
-    """Get AI chat history"""
-    try:
-        from ai_assistant import get_history
-        return get_history()
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# File upload endpoint for the upload component
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
-    """Handle file uploads from the upload component"""
-    try:
-        files = request.files.getlist('files')
-        title = request.form.get('title', '')
-        description = request.form.get('description', '')
-        category = request.form.get('category', '')
-        tags = request.form.get('tags', '').split(',') if request.form.get('tags') else []
-        
-        uploaded_files = []
-        
-        for file in files:
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4()}_{filename}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                file.save(file_path)
-                
-                # Create artifact record
-                artifact = {
-                    'id': str(uuid.uuid4()),
-                    'title': title or filename,
-                    'content': description,
-                    'type': category or 'documentation',
-                    'author': 'Current User',  # In production, get from auth
-                    'tags': tags,
-                    'created_at': datetime.now().isoformat(),
-                    'file_path': file_path,
-                    'file_name': filename,
-                    'file_size': os.path.getsize(file_path)
-                }
-                
-                # Add to artifacts storage
-                from artifacts import artifacts
-                artifacts.append(artifact)
-                uploaded_files.append(artifact)
-                
-                # Update dashboard stats
-                dashboard_data['stats']['total_documents'] += 1
-        
-        return jsonify({
-            'message': 'Files uploaded successfully',
-            'uploaded_files': uploaded_files
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
 
-# Search endpoint that matches frontend expectations
-@app.route('/api/search', methods=['GET'])
-def advanced_search():
-    """Advanced search endpoint matching frontend component"""
-    query = request.args.get('q', '').lower()
-    content_type = request.args.getlist('type')
-    authors = request.args.getlist('author')
-    tags = request.args.getlist('tags')
-    date_range = request.args.get('dateRange', '')
-    priority = request.args.get('priority', '')
-    sort_by = request.args.get('sortBy', 'relevance')
-    
-    # Mock search results that match frontend expectations
-    mock_results = [
-        {
-            'id': 1,
-            'title': "API Authentication & Security Guidelines",
-            'type': "documentation",
-            'author': "Sarah Chen",
-            'date': "2024-07-28",
-            'tags': ["security", "api", "authentication"],
-            'priority': "high",
-            'views': 145,
-            'description': "Comprehensive guide for implementing secure authentication in our microservices architecture...",
-            'lastModified': "3 days ago",
-            'size': "2.3 MB",
-            'status': "updated"
-        },
-        {
-            'id': 2,
-            'title': "Fix: Memory leak in user session management",
-            'type': "pull-request",
-            'author': "Mike Johnson",
-            'date': "2024-07-25",
-            'tags': ["bug-fix", "performance", "session"],
-            'priority': "high",
-            'views': 89,
-            'description': "Resolved critical memory leak affecting user sessions during peak traffic periods...",
-            'lastModified': "1 week ago",
-            'size': "1.2 MB",
-            'status': "merged"
-        },
-        {
-            'id': 3,
-            'title': "Q2 Architecture Review Meeting",
-            'type': "meeting-notes",
-            'author': "Engineering Team",
-            'date': "2024-07-20",
-            'tags': ["architecture", "review", "planning"],
-            'priority': "medium",
-            'views': 67,
-            'description': "Discussion on microservices migration strategy and infrastructure scaling plans...",
-            'lastModified': "2 weeks ago",
-            'size': "856 KB",
-            'status': "final"
+    if file:
+        filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(file_path)
+
+        metadata = {
+            'id': str(uuid.uuid4()),
+            'filename': filename,
+            'unique_filename': unique_filename,
+            'upload_date': datetime.now().isoformat(),
+            'file_size': os.path.getsize(file_path),
+            'file_type': file.content_type,
+            'author': 'Current User',
+            'description': request.form.get('description', ''),
+            'tags': request.form.get('tags', '').split(',') if request.form.get('tags') else []
         }
-    ]
+
+        metadata_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_filename}.json")
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'file_id': metadata['id'],
+            'filename': filename
+        })
     
-    # Apply filters
-    results = mock_results
-    
-    if query:
-        results = [r for r in results if 
-                  query in r['title'].lower() or 
-                  query in r['description'].lower() or
-                  any(query in tag.lower() for tag in r['tags'])]
-    
-    if content_type:
-        results = [r for r in results if r['type'] in content_type]
-    
-    if authors:
-        results = [r for r in results if r['author'] in authors]
-    
-    if tags:
-        results = [r for r in results if any(tag in r['tags'] for tag in tags)]
-    
-    if priority:
-        results = [r for r in results if r['priority'] == priority]
-    
-    # Sort results
-    if sort_by == 'date':
-        results.sort(key=lambda x: x['date'], reverse=True)
-    elif sort_by == 'views':
-        results.sort(key=lambda x: x['views'], reverse=True)
-    elif sort_by == 'title':
-        results.sort(key=lambda x: x['title'])
-    
-    return jsonify(results)
+    return jsonify({'error': 'Upload failed'}), 500
+
+@app.route('/api/agent-query', methods=['POST'])
+def agent_query():
+    data = request.json
+    query = data.get('query', '')
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+
+    try:
+        response = answer_query(query)
+        return jsonify({"response": response})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
+@app.route('/api/dashboard/stats', methods=['GET'])
+def get_dashboard_stats():
+    """
+    Retrieve and return dashboard statistics.
+
+    This function handles GET requests to the '/api/dashboard/stats' endpoint.
+    It returns a JSON object containing various statistics about the dashboard,
+    including total documents, active pull requests, team members, knowledge score,
+    and recent changes in these metrics.
+
+    Returns:
+    --------
+    flask.Response
+        A JSON response containing the following keys:
+        - total_documents (int): The total number of documents in the system.
+        - active_prs (int): The number of active pull requests.
+        - team_members (int): The total number of team members.
+        - knowledge_score (int): The current knowledge score.
+        - changes (dict): Recent changes in metrics, including:
+            - documents (str): Percentage change in total documents.
+            - prs (str): Absolute change in number of active pull requests.
+            - members (str): Absolute change in number of team members.
+            - score (str): Percentage change in knowledge score.
+    """
+    return jsonify({
+        'total_documents': dashboard_data['stats']['total_documents'],
+        'active_prs': dashboard_data['stats']['active_prs'],
+        'team_members': dashboard_data['stats']['team_members'],
+        'knowledge_score': dashboard_data['stats']['knowledge_score'],
+        'changes': {
+            'documents': '+12%',
+            'prs': '+3',
+            'members': '+5',
+            'score': '+2%'
+        }
+    })

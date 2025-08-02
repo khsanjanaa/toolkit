@@ -24,6 +24,8 @@ const Layout = () => {
     { to: '/upload', label: 'Upload', icon: Upload },
     { to: '/search', label: 'Search', icon: Search },
     { to: '/onboarding', label: 'Onboarding', icon: MapPin },
+    { to: '/knowledge-paths', label: 'Knowledge Paths', icon: Brain },
+    { to: '/weekly', label: 'Weekly', icon: Bell },
     { to: '/ai', label: 'AI Assist', icon: Brain }
   ];
 

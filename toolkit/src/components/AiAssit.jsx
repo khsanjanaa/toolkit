@@ -17,6 +17,7 @@ const AIKnowledgeAssistant = () => {
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [useRag, setUseRag] = useState(true); // default to RAG, or false for agent
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -43,50 +44,64 @@ const AIKnowledgeAssistant = () => {
     { icon: MessageSquare, title: "Database Schema Evolution", category: "Database", confidence: 87 }
   ];
 
-  const mockSources = [
-    { type: 'github', title: 'PR #234: Implement new auth system', url: '#', relevance: 95 },
-    { type: 'docs', title: 'Architecture Decision Record: Auth Strategy', url: '#', relevance: 92 },
-    { type: 'meeting', title: 'Security Review Meeting - Oct 2024', url: '#', relevance: 88 },
-    { type: 'issue', title: 'Issue #156: Authentication refactor', url: '#', relevance: 85 }
-  ];
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim()) return;
 
-    const newMessage = {
+    setIsLoading(true);
+
+    // Add user message to chat
+    const userMessage = {
       id: Date.now(),
       type: 'user',
       content: query,
       timestamp: new Date()
     };
+    setMessages(prev => [...prev, userMessage]);
 
-    setMessages(prev => [...prev, newMessage]);
-    setQuery('');
-    setIsLoading(true);
+    // Example: Use a toggle or state to choose endpoint
+    const endpoint = useRag ? '/api/rag-chat' : '/api/agent-query';
 
-    setTimeout(() => {
+    let data;
+    try {
+      const response = await fetch(`http://localhost:5000${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      data = await response.json();
+    } catch (error) {
+      console.error('Error fetching response:', error);
       const aiResponse = {
         id: Date.now() + 1,
         type: 'assistant',
-        content: `Based on my analysis of your codebase and documentation, here's what I found about "${query}":
-
-The decision was primarily driven by performance considerations and team scalability needs. Looking at the GitHub activity from that period, there were several key discussions in PRs #234, #267, and #289 that outline the technical rationale.
-
-Key factors included:
-• Better TypeScript support and developer experience
-• Improved bundle size optimization
-• Enhanced testing capabilities
-• Long-term maintenance considerations
-
-The migration was completed in phases over Q3 2024, with comprehensive documentation in our ADR repository.`,
+        content: "Sorry, I'm having trouble connecting to the server. Please try again later.",
         timestamp: new Date(),
-        sources: mockSources,
-        confidence: 94
+        sources: [],
+        confidence: 0
       };
       setMessages(prev => [...prev, aiResponse]);
       setIsLoading(false);
-    }, 2000);
+      return;
+    }
+
+    const aiResponse = {
+      id: Date.now() + 1,
+      type: 'assistant',
+      content: data.response || data.error || "Sorry, I couldn't find an answer.",
+      timestamp: new Date(),
+      sources: data.sources || [],
+      confidence: data.confidence || 90
+    };
+    setMessages(prev => [...prev, aiResponse]);
+
+    setIsLoading(false);
+    setQuery(''); // Clear the input
   };
 
   const handleSuggestedQuestion = (question) => {
