@@ -6,6 +6,11 @@ import json
 import uuid
 from datetime import datetime
 from dotenv import load_dotenv
+from flask_cors import CORS
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 # Load environment variables
 load_dotenv()
@@ -19,14 +24,18 @@ from github_routes import github_bp
 from knowledge_paths import knowledge_paths_bp
 from data_persistence import weekly_persistence
 from routes.ai_assisstant import ai_bp
-from routes.uploads import upload_bp
+from routes.upload import upload_bp
 from routes.rag_chat import rag_bp
 
 # Import agent function
 from agents.ai_agent import answer_query
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"], "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+CORS(app, resources={
+    r"/api/*": {"origins": ["http://localhost:3000"]},
+    r"/github/*": {"origins": ["http://localhost:3000"]}
+})
+
 
 # Configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -235,3 +244,23 @@ def get_dashboard_stats():
             'score': '+2%'
         }
     })
+@app.route('/api/weekly-dashboard', methods=['GET'])
+def get_weekly_dashboard():
+    mock_weekly_data = {
+        "weekly_summary": {
+            "documents_added": 35,
+            "prs_merged": 12,
+            "meetings_logged": 5,
+            "changes_made": 20
+        },
+        "trending_topics": [
+            "GenAI Integrations",
+            "Flask Routing",
+            "Knowledge Graph Updates"
+        ],
+        "alerts": [
+            "New version of toolkit released",
+            "3 documents need review"
+        ]
+    }
+    return jsonify(mock_weekly_data)

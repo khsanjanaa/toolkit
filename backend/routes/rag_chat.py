@@ -3,7 +3,7 @@ import google.generativeai as genai
 import os
 from scripts.query_rag import get_top_k_chunks
 
-rag_bp = Blueprint("rag_chat", _name_)
+rag_bp = Blueprint("rag_chat", __name__)
 
 # ✅ Configure Gemini
 genai.configure(api_key="AIzaSyAIj2JW7I15YNITvU-fWY9541KFziZMiX8")
