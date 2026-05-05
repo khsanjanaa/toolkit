@@ -1,0 +1,156 @@
+sns->s3->email(in sns access policy)
+{
+  "Version": "2012-10-17",
+  "Id": "example-ID",
+  "Statement": [
+    {
+      "Sid": "Example SNS topic policy",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "s3.amazonaws.com"
+      },
+      "Action": [
+        "SNS:Publish"
+      ],
+      "Resource": "YOUR_SNS_TOPIC_ARN",
+      "Condition": {
+        "ArnLike": {
+          "aws:SourceArn": "YOUR_S3_BUCKET_ARN"
+        },
+        "StringEquals": {
+          "aws:SourceAccount": "YOUR_ACCOUNT_ID"
+        }
+      }
+    }
+  ]
+}
+
+Add in SQS Access Policy
+
+Open SQS → Edit policy
+{
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "sns.amazonaws.com"
+      },
+      "Action": "sqs:SendMessage",
+      "Resource": "YOUR_SQS_ARN",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": "YOUR_SNS_ARN"
+        }
+      }
+    }
+  ]
+}]
+
+
+
+add in Add SNS Access Policy (for S3)
+
+Same as earlier policy (S3 → SNS)
+
+{
+  "Version": "2012-10-17",
+  "Id": "example-ID",
+  "Statement": [
+    {
+      "Sid": "Example SNS topic policy",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "s3.amazonaws.com"
+      },
+      "Action": [
+        "SNS:Publish"
+      ],
+      "Resource": "YOUR_SNS_TOPIC_ARN",
+      "Condition": {
+        "ArnLike": {
+          "aws:SourceArn": "YOUR_S3_BUCKET_ARN"
+        },
+        "StringEquals": {
+          "aws:SourceAccount": "YOUR_ACCOUNT_ID"
+        }
+      }
+    }
+  ]
+}
+
+
+
+Lambda Consumer:
+
+def lambda_handler(event, context):
+    for record in event['Records']:
+        print("Message received from SQS:")
+        print(record['body'])
+
+    return {
+        'statusCode': 200,
+        'body': 'Message processed successfully'
+    }
+
+
+
+
+
+
+- Write the Python code for your Lambda func on. This code will be triggered whenever an object is 
+uploaded to the specified S3 bucket. - Here's an example code snippet: 
+import boto3
+from uuid import uuid4
+
+# Initialize DynamoDB resource outside handler (best practice)
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('newtable2')
+
+def lambda_handler(event, context):
+    
+    if 'Records' in event:
+        for record in event['Records']:
+            
+            # Extract S3 details
+            bucket_name = record['s3']['bucket']['name']
+            object_key = record['s3']['object']['key']
+            size = record['s3']['object'].get('size', -1)
+            event_name = record['eventName']
+            event_time = record['eventTime']
+            
+            # Store in DynamoDB
+            table.put_item(
+                Item={
+                    'unique': str(uuid4()),   # Primary key
+                    'Bucket': bucket_name,
+                    'Object': object_key,
+                    'Size': size,
+                    'Event': event_name,
+                    'EventTime': event_time
+                }
+            )
+    
+    else:
+        print("No S3 event received")
+
+    return {
+        "statusCode": 200,
+        "body": "Data stored in DynamoDB"
+    }
+
+
+
+    import json
+
+def lambda_handler(event, context):
+    a = event.get('num1', 0)
+    b = event.get('num2', 0)
+
+    res = a + b
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'sum': res
+        })
+    }
